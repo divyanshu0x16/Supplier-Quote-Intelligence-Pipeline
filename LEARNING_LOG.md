@@ -29,3 +29,28 @@
 
 **Open questions:**
 -
+
+## M1 — Synthetic data generator
+**Concepts:**
+- **Ground truth alongside data**: the generator writes each document AND the correct answers (`ground_truth.jsonl`),
+  so we can measure the pipeline exactly (tests in M2-M4, accuracy in M8).
+- **Seeded randomness**: `rng` is passed in (like injecting a `Clock`); same seed gives byte-identical output.
+- `@dataclass(frozen=True)` (~ record) for reference data; plain `@dataclass` for `Truth` because we edit it after creation.
+  `frozen` protects the object, not the dict holding it (~ `final Map` that still allows `put`).
+- Idioms: `//` floor division vs `/` always float; f-string format specs `f"{x:,.2f}"`; `x or ""` (careful: `0` is falsy);
+  `enumerate(xs, start=1)`; functions as values (~ method references); `xs[-1]` = last; `if __name__ == "__main__":` (~ main).
+- `field(default_factory=list)`: each instance gets its own list. `def f(xs=[])` would share ONE list across calls;
+  dataclasses refuse `= []` outright.
+- Real-world mess we generate: decimal commas + `;` CSVs, dd.mm vs mm/dd dates, "2 wks ARO", quoted-printable emails
+  (`€` -> `=E2=82=AC`), PDFs that lose table structure ("a PDF is a drawing, not data"), distractor totals and dates.
+
+**Decisions:**
+- Generator lives in `quote_pipeline/synthetic.py` (importable in the REPL); run with `uv run python -m quote_pipeline.synthetic`.
+- reportlab is a dev dependency: only the generator needs it.
+- Generated data is gitignored and reproducible from the seed.
+- Truth records what the document SAYS (typo'd part stays typo'd); `expected_valid` / `issues` record what M4 should decide.
+- Faults are planned (4 types x 2), not random per quote, so every rule is guaranteed something to catch.
+
+**Open questions:**
+- Faults landed 6 in CSVs, 2 in PDFs, 0 in emails (seed 42). Plan faults per format instead?
+- Expiry is relative to fixed QUOTE_DATE (2026-10-24). Should M4 compare against the quote date or "now"?

@@ -10,6 +10,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.0",
+    "reportlab>=5.1.0",
 ]
 
 [build-system]

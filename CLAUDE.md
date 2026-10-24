@@ -35,7 +35,6 @@ pytest, Docker. LLM: Anthropic API with structured output (key in .env, never co
   (trade-offs, failure modes, "why not X?") and correct my answers.
 - Flag Python idioms I'm getting wrong (I'll write Java-style Python).
 - Keep a LEARNING_LOG.md: concepts covered, decisions made and why, open questions.
-- Commit after each milestone with a clear message.
 
 ## Milestones
 M0 Project setup with uv, Python crash course on what we need (typing, dataclasses vs Pydantic, context managers)
