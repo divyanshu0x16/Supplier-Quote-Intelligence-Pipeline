@@ -1,4 +1,7 @@
-"""M0 crash-course exercises (type hints, dataclass vs Pydantic, context managers). Reference only."""
+"""M0 crash-course exercises (type hints, dataclass vs Pydantic, context managers).
+
+Run: uv run python learning/m0_crash_course.py
+"""
 
 
 def cheapest(quotes: list[tuple[str, float]]) -> str | None:

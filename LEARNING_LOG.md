@@ -45,7 +45,7 @@
   (`€` -> `=E2=82=AC`), PDFs that lose table structure ("a PDF is a drawing, not data"), distractor totals and dates.
 
 **Decisions:**
-- Generator lives in `quote_pipeline/synthetic.py` (importable in the REPL); run with `uv run python -m quote_pipeline.synthetic`.
+- Generator moved out of the package (it needs dev-only reportlab): now `scripts/generate_synthetic.py`, run with `uv run python scripts/generate_synthetic.py`.
 - reportlab is a dev dependency: only the generator needs it.
 - Generated data is gitignored and reproducible from the seed.
 - Truth records what the document SAYS (typo'd part stays typo'd); `expected_valid` / `issues` record what M4 should decide.

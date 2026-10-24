@@ -1,4 +1,7 @@
-"""Synthetic supplier quotes with ground-truth labels (M1)."""
+"""Generate synthetic supplier quotes with ground-truth labels (M1).
+
+Usage: uv run python scripts/generate_synthetic.py
+"""
 
 import csv
 import json

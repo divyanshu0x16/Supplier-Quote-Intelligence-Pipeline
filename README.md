@@ -140,7 +140,10 @@ so weak spots are visible (for example, *"lead time is right 70% of the time"*).
 
 ```
 .
-├── src/quote_pipeline/   # application code
+├── src/quote_pipeline/   # the pipeline itself (only code that ships to production)
+├── scripts/              # dev tools, e.g. the synthetic data generator
+├── learning/             # crash-course exercises
+├── data/generated/       # generated sample documents (gitignored)
 ├── tests/                # pytest suite
 ├── pyproject.toml        # dependencies and tool config
 ├── .env.example          # copy to .env and fill in secrets
