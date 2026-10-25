@@ -1,0 +1,10 @@
+# Never send these into the image build
+.env
+.git
+.venv
+data
+tests
+learning
+scripts
+**/__pycache__
+.pytest_cache

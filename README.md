@@ -1,175 +1,128 @@
-# Supplier Quote Intelligence Pipeline
+# Supplier Quote Intelligence
 
-Turn messy supplier quotes (PDFs, emails, spreadsheets) into clean, comparable data,
-so a buyer can answer *"Who can supply part X cheapest within N days?"* in seconds
-instead of digging through an inbox.
+**Stop digging through your inbox to compare supplier quotes.** Drop in the quotes you receive, whether a PDF,
+an email or a spreadsheet, and ask one question:
 
----
+> *"Who can supply part CN-2201 cheapest, delivered within 30 days?"*
 
-## The problem
-
-Suppliers send quotes in whatever format they like:
-
-- a PDF with a price table on page 2
-- an email that says *"we can do $4.10/unit if you take 500+, ~3 weeks"*
-- a CSV export with inconsistent column names and currencies
-
-Comparing these by hand is slow and error-prone. This pipeline reads them, pulls out
-the facts that matter, checks them, and stores them in one place you can query.
-
-## What gets extracted
-
-Every quote is reduced to the same set of fields:
-
-| Field            | Example            | Meaning                                  |
-|------------------|--------------------|------------------------------------------|
-| `supplier`       | Acme Components    | Who sent the quote                       |
-| `part_number`    | AX-4410            | Which part is being quoted               |
-| `unit_price`     | 4.10               | Price per unit                           |
-| `currency`       | USD                | Currency of the price                    |
-| `moq`            | 500                | Minimum order quantity                   |
-| `lead_time_days` | 21                 | Days from order to delivery              |
-| `valid_until`    | 2026-12-31         | Date the quote expires                   |
-| `source_file`    | acme_q3.pdf        | Original document, for traceability      |
+The tool reads each quote, pulls out the price, minimum order, lead time and expiry date, checks them, and gives
+you a ranked answer in seconds. Anything it isn't sure about goes to a **review queue** for a person to check.
+It never guesses.
 
 ---
 
-## How the pipeline works
+## What you can do
 
-```mermaid
-flowchart LR
-    subgraph Ingest
-        A1[PDF quotes]
-        A2[.eml emails]
-        A3[CSV files]
-    end
+| You want to… | Use |
+|---|---|
+| Add a quote you received | **Upload** (`/ingest`) |
+| Find the best current offer for a part | **Compare** (`/compare`) |
+| See every quote on file for a part or supplier | **Quotes** (`/quotes`) |
+| Check the quotes that need a person's attention | **Review queue** (`/review-queue`) |
 
-    subgraph Parse
-        P1[pdfplumber]
-        P2[Python email module]
-        P3[pandas]
-    end
-
-    A1 --> P1
-    A2 --> P2
-    A3 --> P3
-
-    P1 & P2 & P3 --> T[Raw text per document]
-    T --> L[LLM extraction<br/>Claude → Pydantic schema]
-    L --> V{Validation<br/>schema + business rules}
-    V -- valid --> DB[(PostgreSQL<br/>quotes)]
-    V -- invalid --> R[(PostgreSQL<br/>needs_review)]
-    DB --> API[FastAPI]
-    R --> API
-    API --> U[Buyer / dashboard]
-```
-
-### Stage by stage
-
-1. **Ingest:** collect documents from a folder or via `POST /ingest`.
-2. **Parse:** convert each format to plain text. Nothing is interpreted yet.
-3. **Extract:** an LLM (Anthropic Claude, structured output) reads the text and fills
-   in the fields above. The output must match a strict Pydantic schema.
-4. **Validate:** schema checks (types, required fields) plus business rules:
-   - price must be greater than 0
-   - lead time must be in a sane range
-   - part number must be a known part
-
-   Anything that fails goes to a **review queue** along with the reason, so it is never
-   silently dropped.
-5. **Load:** write to PostgreSQL. Loading is **idempotent**, so re-processing the same
-   file never creates duplicate rows.
-6. **Serve:** a REST API for querying, comparing and reviewing quotes.
-
-### What happens to a single quote
-
-```mermaid
-sequenceDiagram
-    participant S as Supplier file
-    participant P as Parser
-    participant L as LLM extractor
-    participant V as Validator
-    participant DB as PostgreSQL
-
-    S->>P: acme_q3.pdf
-    P->>L: raw text
-    L->>V: {supplier, part_number, unit_price, ...}
-    alt passes all checks
-        V->>DB: upsert into quotes
-    else fails a check
-        V->>DB: insert into needs_review (with reason)
-    end
-```
+All four are on one web page: **http://localhost:8000/docs**. Click an item, press **Try it out**, fill in
+the boxes, then press **Execute**.
 
 ---
 
-## API
+## 1. Add a quote
+
+Open **POST /ingest**, choose the file and press **Execute**. Accepted formats:
+
+- **PDF** quotations (with real text, not scanned images)
+- **Emails** saved as `.eml` (in most mail apps: *File → Save As*)
+- **CSV** price lists (comma- or semicolon-separated, any column names)
+
+Two optional boxes:
+- **supplier**: who sent it. Fill this in for **price lists**, which often don't name the supplier inside the file.
+- **received_on**: the date you received it, if not today.
+
+You get an answer straight away, one line per quote in the file:
+
+| status | meaning |
+|---|---|
+| `valid` | checked and stored; it will appear in comparisons |
+| `needs_review` | stored in the review queue with the reasons (see section 3) |
+
+**Uploading the same file twice is safe.** The tool recognises the exact file and skips it (`"skipped": true`),
+so nothing is duplicated and nothing is charged twice. An *updated* price list (new content, same name) is
+treated as a new quote.
+
+---
+
+## 2. Find the best offer
+
+Open **GET /compare** and enter the **part** number. Optionally, enter **max_lead_days** to keep only offers
+that can be delivered in time. For example, `part = CN-2201`, `max_lead_days = 30`:
+
+| Supplier | Price | ≈ USD | Lead time | Valid until |
+|---|---|---|---|---|
+| Acme Components Inc. | 0.38 USD | $0.38 | 21 days | 23 Dec 2026 |
+| Acme Components Inc. | 0.39 USD | $0.39 | 28 days | 23 Nov 2026 |
+| Kanto Precision Co., Ltd. | 60 JPY | $0.40 | 21 days | 23 Nov 2026 |
+| Kanto Precision Co., Ltd. | 66 JPY | $0.44 | 14 days | 23 Nov 2026 |
+
+- **Cheapest first**, even across currencies: prices are converted to an approximate USD value **for ranking
+  only**. The supplier's original price and currency are always shown and are what you'd order at.
+- **Expired quotes are left out automatically**, checked against today's date every time you ask.
+- Every row shows which file it came from (`source_file`), so you can always open the original.
+
+---
+
+## 3. Check the review queue
+
+Open **GET /review-queue**. Each entry shows the file, **the reasons** it was flagged, what the tool read from
+it, and the original text, so you can decide without hunting for the document.
+
+| Reason you'll see | What it usually means | What to do |
+|---|---|---|
+| `unknown part number 'DS-6100X'` | a typo, or a part not in our catalog | check with the supplier, or add the part to the catalog |
+| `unit price must be > 0` | a missing or zero price | ask the supplier for the price |
+| `lead time 400 days is outside 1-180 days` | a typo, or a genuinely long lead time | confirm with the supplier; very long lead times do exist |
+| `valid until … is before the quote was received` | the date was misread (12/08 vs 08/12) or an old quote was re-sent | check the date on the original |
+| `currency not stated` | e.g. `¥` without saying yen or yuan | check the original, then confirm the currency |
+| `… not stated` (supplier, price, …) | the document doesn't say | ask the supplier, or re-upload with the **supplier** box filled in |
+| `PDF has no extractable text (scanned image?)` | a scanned page, which the tool can't read yet | type the quote in, or ask the supplier for a digital PDF |
+
+**Why a queue instead of a guess?** A flagged quote costs you a few seconds. A wrong price that slips through
+silently (say, yen read as yuan, which is 20× off) could cost real money, and nobody would notice.
+
+---
+
+## What it checks
+
+Every quote must have a supplier, part number, price, currency, lead time and expiry date. On top of that:
+
+- the part number is one we actually buy
+- the price is above zero
+- the lead time is between 1 and **180 days** (a business setting: ask your administrator to change it)
+- the quote hadn't already expired when it arrived
+
+A minimum order quantity is optional ("No MOQ" is normal).
+
+---
+
+## Good to know
+
+- **Your documents are read by an AI service.** Quote text is sent to Anthropic's Claude API to be read. Check
+  that this is acceptable for your suppliers' documents before using it with confidential quotes.
+- **One price per quote.** Tiered prices ("$0.12 for 100+, $0.09 for 5,000+") and conditions ("+15% surcharge")
+  aren't captured as separate fields yet. Check the original for those.
+- **Exchange rates are approximate** and fixed. They're good for ranking, not for budgeting.
+- **Cost:** reading a quote costs about $0.0002 (roughly 5,000 quotes per dollar). Re-uploads are free.
+
+---
+
+## Setting it up (for whoever installs it)
+
+Needs Docker and an Anthropic API key.
 
 ```bash
-docker compose up -d                                   # Postgres
-uv run uvicorn quote_pipeline.api.app:app --reload     # then open http://localhost:8000/docs
+cp .env.example .env          # then put the API key in .env
+docker compose up -d --build  # starts the database and the tool
 ```
 
-| Method | Endpoint                                 | Purpose                                        |
-|--------|------------------------------------------|------------------------------------------------|
-| POST   | `/ingest`                                | Upload a PDF, email or CSV; returns each quote's verdict. Re-uploading the same file is skipped. |
-| GET    | `/quotes?part=CN-2201`                   | Validated quotes, optionally filtered by part or supplier |
-| GET    | `/compare?part=CN-2201&max_lead_days=30` | Offers still valid today, cheapest first (approximate USD for ranking across currencies) |
-| GET    | `/review-queue`                          | Quotes that need a person, with the reasons and what was extracted |
+Then open **http://localhost:8000/docs**. To stop it: `docker compose down` (your data is kept).
 
----
-
-## Measuring quality
-
-About 20 documents are labeled by hand with the correct answers. An eval script
-compares the pipeline's output with these labels and reports **accuracy per field**,
-so weak spots are visible (for example, *"lead time is right 70% of the time"*).
-
----
-
-## Tech stack
-
-| Concern         | Tool                                 |
-|-----------------|--------------------------------------|
-| Language        | Python 3.12                          |
-| Packaging       | uv                                   |
-| Schema / validation | Pydantic v2                      |
-| Parsing         | pdfplumber, `email` (stdlib), pandas |
-| LLM             | Anthropic API (structured output)    |
-| Database        | PostgreSQL                           |
-| API             | FastAPI                              |
-| Tests           | pytest                               |
-| Deployment      | Docker Compose (app + Postgres)      |
-
-## Project layout
-
-```
-.
-├── src/quote_pipeline/   # the pipeline itself (only code that ships to production)
-│   ├── config.py         #   all settings in one place (env vars / .env)
-│   ├── domain/           #   models, catalog, business rules: pure logic, no I/O
-│   ├── parsing.py        #   email / CSV / PDF -> text
-│   ├── extraction/       #   Claude extractor + the extraction prompt
-│   ├── storage/          #   Postgres repository + schema.sql
-│   ├── pipeline.py       #   parse -> extract -> validate (extractor injected)
-│   └── ingest.py         #   skip already-seen files, otherwise process + store
-├── scripts/              # dev tools: data generator, pipeline runs (and the wiring of real objects)
-├── docker-compose.yml    # local Postgres (with pgvector)
-├── learning/             # crash-course exercises
-├── data/generated/       # generated sample documents (gitignored)
-├── tests/                # pytest suite
-├── pyproject.toml        # dependencies and tool config
-├── .env.example          # copy to .env and fill in secrets
-└── LEARNING_LOG.md       # concepts, decisions, open questions
-```
-
----
-
-## Getting started
-
-```bash
-brew install uv            # once
-uv sync                    # create venv and install dependencies
-cp .env.example .env       # then add your ANTHROPIC_API_KEY
-uv run pytest              # run tests
-```
+Engineers: see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it works inside, and
+[LEARNING_LOG.md](LEARNING_LOG.md) for the design decisions.

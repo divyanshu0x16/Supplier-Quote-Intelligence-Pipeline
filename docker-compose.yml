@@ -14,5 +14,17 @@ services:
       interval: 2s
       retries: 15
 
+  app:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file: .env  # ANTHROPIC_API_KEY, passed in when the container starts (not baked into the image)
+    environment:
+      # Inside Docker, "localhost" is the app container itself; the database is reached by its service name.
+      DATABASE_URL: postgresql://quotes:quotes@db:5432/quotes
+    depends_on:
+      db:
+        condition: service_healthy  # don't start the API until Postgres accepts connections
+
 volumes:
   pgdata:

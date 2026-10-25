@@ -231,3 +231,24 @@ root), `domain/fx.py`, repository queries (`list_quotes`, `offers_for_part`, `re
 - Upload size limit and file-type checks before parsing; authentication (who may ingest / review?).
 - A "resolve" endpoint for the review queue (a reviewer corrects a quote, it moves to `quotes`), which is also
   where M9's human-reviewed examples would come from.
+
+## M7 — Docker + README
+**Built:** `Dockerfile` (python:3.12-slim + uv 0.13.5), `.dockerignore`, an `app` service in `docker-compose.yml`;
+`README.md` rewritten for a buyer; the technical README moved to `docs/ARCHITECTURE.md`.
+
+**Interview cheat sheet:**
+- *Layer caching:* copy `pyproject.toml` + `uv.lock` and install dependencies BEFORE copying the code, so a code
+  change rebuilds in seconds (verified: the dependency layer shows CACHED).
+- *`uv sync --locked --no-dev`:* exactly the lockfile (fails if it's stale), no test tools in production.
+- *Secrets at run time, not build time:* `.env` is in `.dockerignore`; compose passes it with `env_file`. Anyone
+  with an image can read what's baked into it.
+- *Service names, not localhost:* inside Docker, `localhost` is the container itself; the app reaches Postgres
+  at `db:5432`. `depends_on: condition: service_healthy` waits for Postgres to accept connections.
+- *`--host 0.0.0.0`:* listen on all interfaces, or the API is unreachable from outside the container.
+- *Image size* 595 MB, mostly PDF libraries; a multi-stage build could shrink it.
+- *Two audiences, two documents:* README for the user (what it does, how to read results, limits, the
+  data-privacy note that quotes go to an AI service); ARCHITECTURE.md for engineers.
+
+**Open questions:**
+- Production hardening: non-root user in the image, healthcheck on the app, multiple uvicorn workers,
+  HTTPS via a reverse proxy, authentication.
