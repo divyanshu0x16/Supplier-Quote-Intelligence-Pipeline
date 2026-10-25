@@ -53,4 +53,4 @@
 
 **Open questions:**
 - Faults landed 6 in CSVs, 2 in PDFs, 0 in emails (seed 42). Plan faults per format instead?
-- Expiry is relative to fixed QUOTE_DATE (2026-10-24). Should M4 compare against the quote date or "now"?
+- ~~Expiry: compare against quote date or "now"?~~ **Both, for different questions.** "Still usable?" = `valid_until >= today`, computed at query time in M6 (a stored flag would go stale). "Makes sense?" = `valid_until >= quote date`, an M4 needs_review rule that catches dd/mm vs mm/dd misreads and re-forwarded old quotes.
