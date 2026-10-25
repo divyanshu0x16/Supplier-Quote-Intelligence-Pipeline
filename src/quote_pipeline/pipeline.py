@@ -17,6 +17,7 @@ class Outcome:
     quote: ExtractedQuote | None  # None if the document couldn't be parsed or extracted at all
     issues: list[str] = field(default_factory=list)
     extraction: Extraction | None = None  # tokens, cost and latency, when there was an LLM call
+    raw_text: str | None = None  # the text the model saw; None if the file couldn't be parsed
 
     @property
     def status(self) -> str:
@@ -40,11 +41,12 @@ def process_file(path: Path, source_file: str, received_on: date,
         try:
             result = extract(raw)
         except ExtractionError as e:
-            outcomes.append(Outcome(raw.source_file, raw.row, None, [str(e)]))
+            outcomes.append(Outcome(raw.source_file, raw.row, None, [str(e)], raw_text=raw.text))
             continue
 
         quote = result.quote
         if quote.supplier is None and supplier is not None:
             quote = quote.model_copy(update={"supplier": supplier})  # frozen-style update: a new object
-        outcomes.append(Outcome(raw.source_file, raw.row, quote, validate(quote, received_on), result))
+        outcomes.append(Outcome(raw.source_file, raw.row, quote, validate(quote, received_on), result,
+                                raw_text=raw.text))
     return outcomes

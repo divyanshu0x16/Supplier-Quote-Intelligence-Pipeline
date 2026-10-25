@@ -1,0 +1,18 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17  # Postgres 17 with the pgvector extension pre-installed (needed for M9)
+    environment:
+      POSTGRES_USER: quotes
+      POSTGRES_PASSWORD: quotes  # local development only
+      POSTGRES_DB: quotes
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data  # data survives `docker compose down`; `down -v` wipes it
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U quotes"]
+      interval: 2s
+      retries: 15
+
+volumes:
+  pgdata:

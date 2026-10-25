@@ -4,14 +4,17 @@ Usage: uv run python scripts/run_pipeline.py      (about 42 LLM calls, roughly $
 """
 
 import json
-from datetime import date
 from pathlib import Path
+
+from generate_synthetic import QUOTE_DATE  # same folder: Python puts a script's own folder on the path
 
 from quote_pipeline.catalog import SUPPLIERS
 from quote_pipeline.pipeline import process_file
 
 DATA = Path("data/generated")
-RECEIVED_ON = date(2026, 10, 24)  # stand-in metadata: the generator's fixed quote date
+# Generated quotes are frozen at the generator's fake "today". date.today() would make results depend on the
+# day you run this (quotes "expire" over time). Real ingestion (POST /ingest) uses the actual received date.
+RECEIVED_ON = QUOTE_DATE
 FIELDS = ["supplier", "part_number", "unit_price", "currency", "moq", "lead_time_days", "valid_until"]
 
 

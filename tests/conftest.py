@@ -19,3 +19,20 @@ def generated_data(tmp_path_factory) -> Path:
     out = tmp_path_factory.mktemp("generated")
     module.generate(out)
     return out
+
+
+@pytest.fixture
+def db():
+    """A connection to the local Postgres where everything a test writes is rolled back afterwards."""
+    import psycopg
+
+    from quote_pipeline.db import connect, init_schema
+
+    try:
+        conn = connect()
+    except psycopg.OperationalError:
+        pytest.skip("Postgres is not running (start it with: docker compose up -d)")
+    init_schema(conn)
+    with conn.transaction(force_rollback=True):  # the test's writes never reach the real tables
+        yield conn
+    conn.close()

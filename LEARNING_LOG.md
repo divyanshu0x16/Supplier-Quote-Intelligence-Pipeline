@@ -142,3 +142,39 @@ runs all 42 and compares with ground truth.
 **Open questions:**
 - Fill null currency from supplier master data?
 - Sequential run takes ~60 s for 42 calls; concurrency (thread pool) or the Batches API (50% cheaper) for bulk.
+
+## M5 — Postgres + idempotent load
+**Built:** `docker-compose.yml` (pgvector/pgvector:pg17), `schema.sql` (documents / quotes / needs_review),
+`db.py` (connect, init_schema, load_document), `ingest.py` (`ingest_file`: hash -> skip or process + load),
+`scripts/ingest_generated.py`. Driver: psycopg 3, plain SQL.
+
+**Result:** run 1 = 27 documents, 33 valid quotes, 9 in review, 79 s, $0.0069 stored cost. Run 2 = 0 loaded,
+27 skipped, 1 s, $0.
+
+**Interview cheat sheet:**
+- *Idempotency key = SHA-256 of the file's bytes,* not the file name. Same bytes -> skipped before any LLM call
+  (no duplicates AND no cost). Same name with new content -> a new document (an updated price list).
+- *One transaction per document* (all-or-nothing). A crash mid-CSV leaves no trace; a re-run resumes after the
+  last finished document. That's checkpointing for free (the answer to "API dies at quote 2,000").
+- *Belt and braces:* `ON CONFLICT (sha256) DO NOTHING` covers two runs racing past the `is_loaded` check;
+  `NOT NULL` columns make the database reject an incomplete "valid" quote even if Python has a bug.
+- *`UNIQUE NULLS NOT DISTINCT (document_id, row_num)`:* by default SQL treats NULLs as all different, so a PDF's
+  quote (row NULL) could be inserted twice. Postgres 15+ fixes that with NULLS NOT DISTINCT.
+- *Money is `NUMERIC`, never float.* (0.1 + 0.2 != 0.3 in floating point.)
+- *psycopg 3 gotcha:* the default connection silently opens a transaction that only saves on `commit()`. We use
+  `autocommit=True` plus explicit `with conn.transaction():` blocks.
+- *Tests* run inside `conn.transaction(force_rollback=True)`: real database, nothing left behind.
+
+**ETL vs ELT:**
+- *ETL* (Extract, Transform, Load): transform BEFORE loading. That's us: parse + LLM + validate, then store clean rows.
+- *ELT:* load raw data first, transform later inside the database/warehouse (dbt, Snowflake, BigQuery).
+  Re-transforming is cheap because the raw data is already there.
+- *Why ETL here:* the transform is an LLM call, not SQL, so it can't run inside the database; and the business
+  wants clean, validated rows, not raw documents.
+- *The ELT idea we kept:* `raw_text` is stored with every quote. A better prompt or model (M8/M9) can re-extract
+  everything from the database without the original files.
+
+**Open questions:**
+- An updated price list (same name, new hash) adds new rows, but the old quotes stay. Supersede them
+  (valid_from / valid_to, or keep only the latest document per supplier + part)?
+- Schema changes: `CREATE TABLE IF NOT EXISTS` is fine for now; production would use migrations (Alembic ~ Flyway).
