@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS documents (
 -- quote even if the Python code has a bug (defence in depth).
 CREATE TABLE IF NOT EXISTS quotes (
     id             BIGSERIAL PRIMARY KEY,
-    document_id    BIGINT        NOT NULL REFERENCES documents (id),
+    document_id    BIGNT        NOT NULL REFERENCES documents (id),
     row_num        INT,                     -- CSV data row; NULL for PDFs and emails
     supplier       TEXT          NOT NULL,
     part_number    TEXT          NOT NULL,
