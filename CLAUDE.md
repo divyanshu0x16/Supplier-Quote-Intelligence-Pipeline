@@ -46,6 +46,9 @@ M5 Postgres schema + idempotent load (discuss ETL vs ELT here)
 M6 FastAPI endpoints + tests
 M7 Docker compose + README
 M8 Eval script + accuracy report; discuss how I'd improve weak fields
-M9 RAG: retrieval-augmented extraction (dynamic few-shot: retrieve similar human-reviewed quotes
-   via pgvector, add them to the extraction prompt); measure per-field gain against the M8 baseline
-Stretch: natural-language query endpoint (LLM -> safe parameterized filter, never raw SQL)
+M9 RAG: DESIGNED, NOT BUILT (decided 2026-10-25). Design: retrieval-augmented extraction (dynamic few-shot:
+   retrieve similar human-reviewed quotes via pgvector, add them to the extraction prompt). Notes in LEARNING_LOG.md.
+Stretch: natural-language query endpoint (LLM -> safe parameterized filter, never raw SQL). Not built.
+
+## Status
+Project complete through M8 (2026-10-25). M9 and the stretch goal were deliberately not built.

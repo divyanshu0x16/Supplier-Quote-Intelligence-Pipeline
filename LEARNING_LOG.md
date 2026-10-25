@@ -252,3 +252,35 @@ root), `domain/fx.py`, repository queries (`list_quotes`, `offers_for_part`, `re
 **Open questions:**
 - Production hardening: non-root user in the image, healthcheck on the app, multiple uvicorn workers,
   HTTPS via a reverse proxy, authentication.
+
+## M9 — RAG: designed, not built (revision notes)
+Decided not to build: the fundamentals are the same as an earlier RAG project; only the stack differs.
+
+**The pattern:** Retrieve relevant text -> Augment the prompt with it -> Generate.
+
+| Block | What it does | Typical | In this project's design |
+|---|---|---|---|
+| Embedding model | text -> vector; similar meaning = nearby vectors | OpenAI embeddings | Voyage AI (Anthropic's recommended provider; Anthropic has no embeddings model) or a local model |
+| Vector store | store vectors, find nearest fast | Pinecone | pgvector inside the existing Postgres (no new database) |
+| Retrieval | k most similar items | chunks of one document | verified past quotes + their correct extraction |
+| Augmentation | put results in the prompt | "answer using this context" | "here's how similar quotes were correctly read" |
+| Orchestration | glue | LangChain | ~30 lines of own code; a framework would hide more than it helps |
+
+**Retrieval-augmented extraction (dynamic few-shot):** retrieve human-verified quotes similar to the new one
+(same supplier habits: decimal commas, "wks ARO", which ¥) and include them as worked examples. Examples come
+from resolved review-queue items, so the system improves with use (e.g. kanto_004's ¥ resolved once helps every
+later Kanto quote).
+
+**Traps an interviewer will probe:**
+1. *Leakage:* a test quote must never retrieve its own answer. Split examples and eval data (train/test).
+2. *Is vector search needed?* Try the simple version first: "last 3 verified quotes from the same supplier"
+   (a SQL filter, no embeddings). Realistic answer: filter by supplier, then rank by similarity.
+3. *Cost:* examples lengthen every prompt (more input tokens); the eval decides whether the gain is worth it.
+
+**Why it wasn't measurable here:** the M8 eval is saturated (98-100% per field), so RAG could show no real gain.
+The honest line: "on harder real-world data I'd expect a gain; my synthetic set saturated, so I'd harden the
+eval first."
+
+**Classic RAG vocabulary to revise:** chunking (size / overlap), embedding dimensions, cosine similarity, top-k,
+HNSW / IVF indexes (approximate nearest neighbour), hybrid search (keyword BM25 + vectors), re-ranking,
+metadata filters, evaluating retrieval (recall@k) separately from generation.
