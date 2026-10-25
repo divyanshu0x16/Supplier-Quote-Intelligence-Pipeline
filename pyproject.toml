@@ -4,8 +4,10 @@ version = "0.1.0"
 description = "ETL pipeline: messy supplier quotes -> validated, queryable data"
 requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=2.3.0",
     "pdfplumber>=0.11.10",
     "pydantic>=2.7",
+    "python-dotenv>=1.2.4",
 ]
 
 [dependency-groups]

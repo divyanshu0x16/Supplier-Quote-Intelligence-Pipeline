@@ -83,3 +83,36 @@
 - Attachment-only emails: parse the attached PDF instead of rejecting.
 - Scanned PDFs need OCR (out of scope; mention in interviews).
 - Faults landed in 0 emails (seed 42); plan faults per format.
+
+## M3 — LLM extraction
+**Decisions:**
+- The extraction schema (`ExtractedQuote`) has shape and types only; no business rules (`gt=0` would hide a zero price
+  as an extraction error). Validation is M4.
+- Every field is nullable but required (`x: T | None`, no default): the model must say `null` explicitly, and it never
+  has to invent a value to satisfy the schema. Missing values become needs_review reasons, not hallucinations.
+- Don't ask the LLM for what we already know: `source_file` / `row` come from the parser. **The supplier for CSV rows
+  comes from ingestion metadata** (sender / upload form), not from the model guessing from a file name. The prompt
+  still allows `null`.
+- Structured outputs (`client.messages.parse(output_format=ExtractedQuote)`): the schema is enforced by the API, so
+  there's no "please return JSON" prompting or `json.loads`.
+- Model: `claude-haiku-5-5` (cheapest, $0.10 / $0.50 per MTok) at `effort: "low"`. Upgrade only if M8 shows a weak field.
+- First tries with a one-line prompt: 20/21 fields correct on the 3 trickiest files. Judge prompt changes with M8 numbers,
+  not by eye.
+- Retries: the SDK already retries 429 / 5xx / timeouts / connection errors with backoff (`max_retries=4`). 400s are
+  never retried (our bug). An APIError that survives retries is re-raised: it's an outage, not a bad document, so it
+  must not land in needs_review.
+- `ExtractionError` (own exception type) when the model answered but unusably: `stop_reason` max_tokens / refusal, or
+  output that doesn't parse. The pipeline catches it per quote and routes to needs_review. Own type so we never
+  accidentally swallow real bugs with a broad `except Exception`.
+- Every call logs latency, tokens and cost; `Extraction` carries them so M5 can store them per quote.
+- Measured: ~1,650 input / ~80 output tokens, ~1.3-1.9 s, ~$0.0002 per quote (all 42 ~ $0.01). Input is mostly the
+  fixed prompt + schema: at scale that's the prompt-caching candidate.
+
+**Concepts:**
+- `logging.getLogger(__name__)` (~ SLF4J `LoggerFactory.getLogger(X.class)`); libraries create loggers, only the
+  entry point configures them. Gotcha: under `python -m`, `__name__` is `"__main__"`.
+- Dependency injection by default argument (`client=default_client`) lets tests pass a fake: offline, free, no key.
+- A context manager can `yield` a value (`with timed() as timer:`), like `with open(...) as f`.
+
+**Open questions:**
+- Wire it together: parse -> extract -> fill supplier from ingestion metadata -> validate (M4).
