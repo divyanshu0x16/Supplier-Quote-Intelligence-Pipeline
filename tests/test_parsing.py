@@ -56,6 +56,14 @@ def test_parse_csv_one_quote_per_row(tmp_path, delimiter, price):
     assert "mueller_pricelist.csv" in quotes[0].text  # the file name is the only supplier clue
 
 
+def test_parse_csv_single_column_falls_back_to_comma(tmp_path):
+    # csv.Sniffer can't guess a delimiter when there is none; that must not crash the pipeline
+    path = tmp_path / "parts.csv"
+    path.write_text("Part Number\nCN-2201\n", encoding="utf-8")
+    [quote] = parse_csv(path, "csv/parts.csv")
+    assert "Part Number: CN-2201" in quote.text
+
+
 def test_parse_pdf_joins_all_pages(tmp_path):
     path = tmp_path / "quote.pdf"
     c = canvas.Canvas(str(path))

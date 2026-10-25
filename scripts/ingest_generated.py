@@ -20,10 +20,11 @@ def main() -> None:
         repo.init_schema()
         loaded = skipped = 0
         for path, source_file in generated_documents():
-            if ingest_file(repo, pipeline, path, source_file, RECEIVED_ON, supplier_from_filename(source_file)):
-                loaded += 1
-            else:
+            outcomes = ingest_file(repo, pipeline, path, source_file, RECEIVED_ON, supplier_from_filename(source_file))
+            if outcomes is None:
                 skipped += 1
+            else:
+                loaded += 1
         counts = {t: repo.count(t) for t in ("documents", "quotes", "needs_review")}
 
     print(f"This run: {loaded} documents loaded, {skipped} skipped (already in the database)")

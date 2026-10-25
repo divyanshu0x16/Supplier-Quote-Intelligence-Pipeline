@@ -33,7 +33,10 @@ def parse_email(path: Path, source_file: str) -> list[RawQuote]:
 def parse_csv(path: Path, source_file: str) -> list[RawQuote]:
     """Read a supplier price list and return one RawQuote per data row, as "Header: value" lines."""
     text = path.read_text(encoding="utf-8-sig")  # -sig strips Excel's invisible byte-order mark
-    dialect = csv.Sniffer().sniff(text, delimiters=",;")  # detect , vs ; (German Excel uses ;)
+    try:
+        dialect = csv.Sniffer().sniff(text, delimiters=",;")  # detect , vs ; (German Excel uses ;)
+    except csv.Error:  # can't tell (e.g. a single-column file): assume the standard comma format
+        dialect = csv.excel
     reader = csv.DictReader(text.splitlines(), dialect=dialect)  # header row becomes the dict keys
 
     quotes = []

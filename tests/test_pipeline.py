@@ -5,27 +5,14 @@ Possible only because Pipeline receives its extractor instead of creating one: d
 
 from datetime import date
 
-from quote_pipeline.domain.models import ExtractedQuote, Extraction, ExtractionError, RawQuote
+from fakes import FakeExtractor
+
+from quote_pipeline.domain.models import ExtractedQuote, ExtractionError
 from quote_pipeline.pipeline import Pipeline
 
 RECEIVED = date(2026, 10, 24)
 QUOTE = ExtractedQuote(supplier=None, part_number="CN-2201", unit_price=0.38, currency="EUR",
                        moq=None, lead_time_days=14, valid_until=date(2026, 12, 23))
-
-
-class FakeExtractor:
-    """Satisfies the QuoteExtractor protocol without declaring it: having .extract() is enough."""
-
-    def __init__(self, quotes_by_row: dict[int | None, ExtractedQuote | Exception]):
-        self.quotes_by_row = quotes_by_row
-        self.calls: list[RawQuote] = []
-
-    def extract(self, raw: RawQuote) -> Extraction:
-        self.calls.append(raw)
-        result = self.quotes_by_row[raw.row]
-        if isinstance(result, Exception):
-            raise result
-        return Extraction(result, "fake", input_tokens=0, output_tokens=0, latency_ms=0.0, cost_usd=0.0)
 
 
 def write_csv(tmp_path):

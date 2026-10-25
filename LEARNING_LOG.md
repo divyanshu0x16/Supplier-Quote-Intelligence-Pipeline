@@ -204,3 +204,30 @@ domain/ (models, catalog, validation)  <-  parsing, extraction/, storage/  <-  p
 **Python vs Java structure (interview / sanity):** module = unit of organisation; functions are first-class
 (a one-method interface is usually just a function); DI by constructor/default args, no container; flat over
 nested until it hurts. Structure is added when it pays for itself, not up front.
+
+## M6 — FastAPI
+**Built:** `api/app.py` (routes), `api/schemas.py` (response DTOs), `api/dependencies.py` (the API's composition
+root), `domain/fx.py`, repository queries (`list_quotes`, `offers_for_part`, `review_queue`). Run:
+`uv run uvicorn quote_pipeline.api.app:app --reload`, then http://localhost:8000/docs.
+
+**Interview cheat sheet:**
+- *FastAPI ~ Spring MVC:* decorators ~ `@GetMapping`; Pydantic response models ~ DTOs, and they generate the
+  OpenAPI `/docs` page; `Depends()` ~ `@Autowired`; `app.dependency_overrides` ~ `@MockBean` in tests.
+- *`def` vs `async def`:* the ingest endpoint blocks on the LLM call, so it's a plain `def`; FastAPI runs it in a
+  worker thread instead of stalling the event loop. `async def` + a blocking call would freeze every request.
+- *Dependency lifetimes:* repository = one connection per request (a `yield` dependency closes it afterwards,
+  like a context manager); pipeline = singleton via `lru_cache` (one Anthropic client). Production: a connection pool.
+- *Comparing across currencies:* rank by approximate USD (fixed rates), but always return the original price and
+  currency. Real system: daily FX table, convert at the quote date.
+- *Expiry at query time:* `/compare` filters `valid_until >= today` when asked, so results never go stale.
+- *Outage -> 503:* an `anthropic.APIError` after retries becomes "retry later"; nothing is stored for that file,
+  so the retry processes it cleanly (one transaction per document).
+- *Uploads:* parsers read from a path, so uploads go to a temporary folder that's deleted afterwards (the
+  bytes-vs-path open question from M2). Directory parts of the client's filename are dropped.
+- *A test found a real bug:* `csv.Sniffer` raises `csv.Error` (not a ValueError) on a single-column file, which
+  would have crashed the upload instead of routing it to review. Fixed with a fallback to comma + a regression test.
+
+**Open questions:**
+- Upload size limit and file-type checks before parsing; authentication (who may ingest / review?).
+- A "resolve" endpoint for the review queue (a reviewer corrects a quote, it moves to `quotes`), which is also
+  where M9's human-reviewed examples would come from.

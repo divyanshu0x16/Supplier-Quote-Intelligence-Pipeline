@@ -103,14 +103,19 @@ sequenceDiagram
 
 ---
 
-## API (planned)
+## API
+
+```bash
+docker compose up -d                                   # Postgres
+uv run uvicorn quote_pipeline.api.app:app --reload     # then open http://localhost:8000/docs
+```
 
 | Method | Endpoint                                 | Purpose                                        |
 |--------|------------------------------------------|------------------------------------------------|
-| GET    | `/quotes`                                | List all validated quotes                      |
-| GET    | `/compare?part=AX-4410&max_lead_days=30` | Compare suppliers for a part, filtered by lead time |
-| GET    | `/review-queue`                          | Quotes that failed validation, with reasons    |
-| POST   | `/ingest`                                | Submit new documents for processing            |
+| POST   | `/ingest`                                | Upload a PDF, email or CSV; returns each quote's verdict. Re-uploading the same file is skipped. |
+| GET    | `/quotes?part=CN-2201`                   | Validated quotes, optionally filtered by part or supplier |
+| GET    | `/compare?part=CN-2201&max_lead_days=30` | Offers still valid today, cheapest first (approximate USD for ranking across currencies) |
+| GET    | `/review-queue`                          | Quotes that need a person, with the reasons and what was extracted |
 
 ---
 

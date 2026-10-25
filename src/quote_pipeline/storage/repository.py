@@ -4,11 +4,14 @@ from datetime import date
 from pathlib import Path
 
 import psycopg
+from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from quote_pipeline.domain.models import Outcome
 
 SCHEMA_SQL = Path(__file__).with_name("schema.sql")
+QUOTE_COLUMNS = """q.id, d.source_file, q.row_num, q.supplier, q.part_number, q.unit_price, q.currency, q.moq,
+                   q.lead_time_days, q.valid_until"""
 
 
 def connect(database_url: str) -> psycopg.Connection:
@@ -26,6 +29,47 @@ class QuoteRepository:
 
     def is_loaded(self, sha256: str) -> bool:
         return self.conn.execute("SELECT 1 FROM documents WHERE sha256 = %s", (sha256,)).fetchone() is not None
+
+    def list_quotes(self, part_number: str | None = None, supplier: str | None = None,
+                    limit: int = 100) -> list[dict]:
+        # "%(x)s IS NULL OR column = %(x)s": one query where each filter is optional
+        return self._rows(
+            f"""
+            SELECT {QUOTE_COLUMNS} FROM quotes q JOIN documents d ON d.id = q.document_id
+            WHERE (%(part)s::text IS NULL OR q.part_number = %(part)s)
+              AND (%(supplier)s::text IS NULL OR q.supplier = %(supplier)s)
+            ORDER BY q.part_number, q.id
+            LIMIT %(limit)s
+            """,
+            {"part": part_number, "supplier": supplier, "limit": limit},
+        )
+
+    def offers_for_part(self, part_number: str, valid_on: date, max_lead_days: int | None = None) -> list[dict]:
+        """Quotes still valid on `valid_on` (expiry checked at QUERY time, so it never goes stale)."""
+        return self._rows(
+            f"""
+            SELECT {QUOTE_COLUMNS} FROM quotes q JOIN documents d ON d.id = q.document_id
+            WHERE q.part_number = %(part)s
+              AND q.valid_until >= %(valid_on)s
+              AND (%(max_lead)s::int IS NULL OR q.lead_time_days <= %(max_lead)s)
+            """,
+            {"part": part_number, "valid_on": valid_on, "max_lead": max_lead_days},
+        )
+
+    def review_queue(self, limit: int = 100) -> list[dict]:
+        return self._rows(
+            """
+            SELECT r.id, d.source_file, r.row_num, r.reasons, r.extracted, r.raw_text, r.created_at
+            FROM needs_review r JOIN documents d ON d.id = r.document_id
+            ORDER BY r.id DESC  -- newest first (created_at can tie: now() is fixed within a transaction)
+            LIMIT %(limit)s
+            """,
+            {"limit": limit},
+        )
+
+    def _rows(self, sql: str, params: dict) -> list[dict]:
+        with self.conn.cursor(row_factory=dict_row) as cur:  # rows as {"column": value} instead of tuples
+            return cur.execute(sql, params).fetchall()
 
     def count(self, table: str) -> int:
         assert table in {"documents", "quotes", "needs_review"}  # never put untrusted text into SQL
