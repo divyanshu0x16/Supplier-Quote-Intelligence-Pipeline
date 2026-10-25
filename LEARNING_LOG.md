@@ -54,3 +54,32 @@
 **Open questions:**
 - Faults landed 6 in CSVs, 2 in PDFs, 0 in emails (seed 42). Plan faults per format instead?
 - ~~Expiry: compare against quote date or "now"?~~ **Both, for different questions.** "Still usable?" = `valid_until >= today`, computed at query time in M6 (a stored flag would go stale). "Makes sense?" = `valid_until >= quote date`, an M4 needs_review rule that catches dd/mm vs mm/dd misreads and re-forwarded old quotes.
+
+## M2 — Parsers
+**Concepts:**
+- A parser only gets the words out; it doesn't interpret (`0,40` stays `"0,40"`). Interpretation is M3's job.
+- Email: `message_from_bytes(..., policy=policy.default)` + `get_body(...)` + `get_content()` decodes quoted-printable.
+  Headers: `msg["From"]` or `msg.get("From")`, not both (`msg.get["From"]` -> "not subscriptable").
+- CSV: `utf-8-sig` strips Excel's BOM; `csv.Sniffer` detects `,` vs `;`; `DictReader` maps header -> value.
+  Built-in `csv` instead of pandas, because pandas infers types (`1000` -> `1000.0`, empty -> NaN).
+- PDF: pdfplumber reads text per page; table structure is lost ("a PDF is a drawing, not data").
+- pytest: `tmp_path` fixture (~ `@TempDir`), injected by parameter name; `parametrize` (~ `@ParameterizedTest`);
+  `pytest.raises` (~ `assertThrows`); session-scoped fixtures in `conftest.py`.
+
+**Decisions:**
+- Every parser returns `list[RawQuote]` (one per quote): PDF/email -> 1, CSV -> 1 per row. `(source_file, row)` is the
+  same key as ground truth.
+- `path` (where to read, machine-specific) vs `source_file` (stable ID for ground truth / DB / users).
+- Fail loudly with a reason (`ValueError`) for attachment-only emails and text-less (scanned) PDFs. The ingest step
+  will catch it per file and route the file to needs_review.
+- Two date checks: "still usable?" = valid_until >= today, at query time (M6); "makes sense?" = valid_until >= quote
+  date, at load time (M4).
+- `pdfplumber` is a runtime dependency; reportlab stays dev-only.
+- `parse_file` dispatches on extension via a dict of functions (strategy pattern).
+- End-to-end test: parsed `(source_file, row)` keys must equal ground truth's exactly (not just the count).
+
+**Open questions:**
+- Parsers take a `Path`; `POST /ingest` (M6) receives bytes. Change to accept bytes?
+- Attachment-only emails: parse the attached PDF instead of rejecting.
+- Scanned PDFs need OCR (out of scope; mention in interviews).
+- Faults landed in 0 emails (seed 42); plan faults per format.

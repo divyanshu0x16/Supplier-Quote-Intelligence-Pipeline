@@ -1,9 +1,12 @@
 """Turn supplier documents (email, PDF, CSV) into plain text, one chunk per quote (M2)."""
 
+import csv
 import email
-from email import policy
 from dataclasses import dataclass
+from email import policy
 from pathlib import Path
+
+import pdfplumber
 
 
 @dataclass(frozen=True)
@@ -31,3 +34,37 @@ def parse_email(path: Path, source_file: str) -> list[RawQuote]:
         row=None,
         text="\n".join(lines))
     return [raw_quote]
+
+
+def parse_csv(path: Path, source_file: str) -> list[RawQuote]:
+    """Read a supplier price list and return one RawQuote per data row, as "Header: value" lines."""
+    text = path.read_text(encoding="utf-8-sig")  # -sig strips Excel's invisible byte-order mark
+    dialect = csv.Sniffer().sniff(text, delimiters=",;")  # detect , vs ; (German Excel uses ;)
+    reader = csv.DictReader(text.splitlines(), dialect=dialect)  # header row becomes the dict keys
+
+    quotes = []
+    for i, row in enumerate(reader, start=1):
+        lines = [f"File: {source_file}"] + [f"{header}: {value}" for header, value in row.items()]
+        quotes.append(RawQuote(source_file=source_file, row=i, text="\n".join(lines)))
+    return quotes
+
+
+def parse_pdf(path: Path, source_file: str) -> list[RawQuote]:
+    """Extract the text of every page of a PDF quotation as one RawQuote."""
+    with pdfplumber.open(path) as pdf:
+        pages = [page.extract_text() or "" for page in pdf.pages]
+    text = "\n\n".join(pages).strip()
+    if not text:  # a scanned PDF is just images: no text layer, so it needs OCR
+        raise ValueError(f"{source_file}: PDF has no extractable text (scanned image?)")
+    return [RawQuote(source_file=source_file, row=None, text=text)]
+
+
+PARSERS = {".eml": parse_email, ".csv": parse_csv, ".pdf": parse_pdf}
+
+
+def parse_file(path: Path, source_file: str) -> list[RawQuote]:
+    """Pick the right parser from the file extension."""
+    parser = PARSERS.get(path.suffix.lower())
+    if parser is None:
+        raise ValueError(f"{source_file}: unsupported file type {path.suffix!r}")
+    return parser(path, source_file)

@@ -46,4 +46,6 @@ M5 Postgres schema + idempotent load (discuss ETL vs ELT here)
 M6 FastAPI endpoints + tests
 M7 Docker compose + README
 M8 Eval script + accuracy report; discuss how I'd improve weak fields
+M9 RAG: retrieval-augmented extraction (dynamic few-shot: retrieve similar human-reviewed quotes
+   via pgvector, add them to the extraction prompt); measure per-field gain against the M8 baseline
 Stretch: natural-language query endpoint (LLM -> safe parameterized filter, never raw SQL)
