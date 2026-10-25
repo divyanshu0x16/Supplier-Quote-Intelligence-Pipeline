@@ -1,6 +1,6 @@
 """Run every generated document through the pipeline (no database) and compare with ground truth.
 
-Usage: uv run python scripts/run_pipeline.py      (about 42 LLM calls, roughly $0.01)
+Usage: uv run python scripts/evaluate.py      (about 42 LLM calls, roughly $0.01)
 """
 
 import json

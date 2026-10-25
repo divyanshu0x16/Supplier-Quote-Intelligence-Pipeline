@@ -140,7 +140,7 @@ runs all 42 and compares with ground truth.
 - *Metadata beats inference:* supplier (and received date) come from how the document arrived, not from the LLM.
 
 **Open questions:**
-- Fill null currency from supplier master data?
+- ~~Fill null currency from supplier master data?~~ **Decided: no.** Keep the honest flag: an ambiguous `¥` goes to review (33 valid / 9 review vs the ideal 34 / 8). A wrong currency would be a 20x price error nobody notices.
 - Sequential run takes ~60 s for 42 calls; concurrency (thread pool) or the Batches API (50% cheaper) for bulk.
 
 ## M5 — Postgres + idempotent load
