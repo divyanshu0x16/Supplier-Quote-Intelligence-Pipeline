@@ -23,16 +23,18 @@ def generated_data(tmp_path_factory) -> Path:
 
 @pytest.fixture
 def db():
-    """A connection to the local Postgres where everything a test writes is rolled back afterwards."""
+    """A QuoteRepository on the local Postgres; everything a test writes is rolled back afterwards."""
     import psycopg
 
-    from quote_pipeline.db import connect, init_schema
+    from quote_pipeline.config import get_settings
+    from quote_pipeline.storage.repository import QuoteRepository, connect
 
     try:
-        conn = connect()
+        conn = connect(get_settings().database_url)
     except psycopg.OperationalError:
         pytest.skip("Postgres is not running (start it with: docker compose up -d)")
-    init_schema(conn)
+    repo = QuoteRepository(conn)
+    repo.init_schema()
     with conn.transaction(force_rollback=True):  # the test's writes never reach the real tables
-        yield conn
+        yield repo
     conn.close()

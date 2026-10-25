@@ -17,6 +17,7 @@ KNOWN_PARTS: dict[str, Part] = {
     "DS-6100": Part("6.1in OLED display module", 22.00),
 }
 
+
 @dataclass(frozen=True)
 class Supplier:
     name: str

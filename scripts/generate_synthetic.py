@@ -18,7 +18,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from quote_pipeline.catalog import KNOWN_PARTS, SUPPLIERS, Supplier
+from quote_pipeline.domain.catalog import KNOWN_PARTS, SUPPLIERS, Supplier
 
 QUOTE_DATE = date(2026, 10, 24)  # fixed, so the same seed always gives the same output
 FX_FROM_USD = {"USD": 1.0, "EUR": 0.92, "JPY": 150.0}

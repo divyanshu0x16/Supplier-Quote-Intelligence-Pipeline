@@ -1,19 +1,13 @@
-"""Turn supplier documents (email, PDF, CSV) into plain text, one chunk per quote (M2)."""
+"""Turn supplier documents (email, PDF, CSV) into plain text, one RawQuote per quote."""
 
 import csv
 import email
-from dataclasses import dataclass
 from email import policy
 from pathlib import Path
 
 import pdfplumber
 
-
-@dataclass(frozen=True)
-class RawQuote:
-    source_file: str  # path relative to the data folder, e.g. "email/acme_006.eml"
-    row: int | None  # 1-based data row for CSVs; None for PDFs and emails
-    text: str  # plain text for the extractor (M3) to read
+from quote_pipeline.domain.models import RawQuote
 
 
 def parse_email(path: Path, source_file: str) -> list[RawQuote]:

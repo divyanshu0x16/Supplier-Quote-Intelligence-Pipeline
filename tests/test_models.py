@@ -3,7 +3,7 @@ from datetime import date
 import pytest
 from pydantic import ValidationError
 
-from quote_pipeline.schema import ExtractedQuote
+from quote_pipeline.domain.models import ExtractedQuote
 
 FULL = {
     "supplier": "Müller Präzisionsteile GmbH",

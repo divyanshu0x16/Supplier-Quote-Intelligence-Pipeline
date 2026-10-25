@@ -1,16 +1,16 @@
-"""Business rules (M4): is an extracted quote good enough to use, or does a human need to look at it?"""
+"""Business rules: is an extracted quote good enough to use, or does a human need to look at it?"""
 
 from datetime import date
 
-from quote_pipeline.catalog import KNOWN_PARTS
-from quote_pipeline.schema import ExtractedQuote
-
-# A business decision, not an engineering one: agree it with procurement, ideally per part category.
-MAX_LEAD_TIME_DAYS = 180
+from quote_pipeline.domain.catalog import KNOWN_PARTS
+from quote_pipeline.domain.models import ExtractedQuote
 
 
-def validate(q: ExtractedQuote, received_on: date) -> list[str]:
-    """Return the reasons this quote needs human review. An empty list means it's valid."""
+def validate(q: ExtractedQuote, received_on: date, max_lead_time_days: int) -> list[str]:
+    """Return the reasons this quote needs human review. An empty list means it's valid.
+
+    `max_lead_time_days` is a business decision (Settings), ideally per part category.
+    """
     issues = []
 
     for field in ("supplier", "part_number", "unit_price", "currency", "lead_time_days", "valid_until"):
@@ -22,8 +22,8 @@ def validate(q: ExtractedQuote, received_on: date) -> list[str]:
         issues.append(f"unknown part number {q.part_number!r}")
     if q.unit_price is not None and q.unit_price <= 0:
         issues.append(f"unit price must be > 0, got {q.unit_price}")
-    if q.lead_time_days is not None and not 0 < q.lead_time_days <= MAX_LEAD_TIME_DAYS:
-        issues.append(f"lead time {q.lead_time_days} days is outside 1-{MAX_LEAD_TIME_DAYS} days")
+    if q.lead_time_days is not None and not 0 < q.lead_time_days <= max_lead_time_days:
+        issues.append(f"lead time {q.lead_time_days} days is outside 1-{max_lead_time_days} days")
     if q.valid_until is not None and q.valid_until < received_on:
         # Usually a misread date format (dd/mm vs mm/dd) or an old quote forwarded again.
         issues.append(f"valid until {q.valid_until} is before the quote was received ({received_on})")

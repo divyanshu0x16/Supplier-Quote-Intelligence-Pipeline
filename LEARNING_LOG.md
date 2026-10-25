@@ -178,3 +178,29 @@ runs all 42 and compares with ground truth.
 - An updated price list (same name, new hash) adds new rows, but the old quotes stay. Supersede them
   (valid_from / valid_to, or keep only the latest document per supplier + part)?
 - Schema changes: `CREATE TABLE IF NOT EXISTS` is fine for now; production would use migrations (Alembic ~ Flyway).
+
+## Refactor — layers, config, dependency injection (before M6)
+**Why:** flat modules were fine while small, but there were real problems: an API client and `load_dotenv()` ran
+at import time, configuration was spread over four files, and `process_file()` was hard-wired to Claude (no
+offline pipeline tests).
+
+**Layout (dependencies point inward; domain imports nothing else):**
+```
+domain/ (models, catalog, validation)  <-  parsing, extraction/, storage/  <-  pipeline, ingest  <-  scripts / API
+```
+
+**What changed:**
+- `config.Settings` (pydantic-settings, ~ @ConfigurationProperties) is the single source of configuration;
+  `get_settings()` is cached. python-dotenv removed.
+- No side effects at import: `ClaudeExtractor.from_settings()` and `connect()` are called by entry points.
+- Classes only where something holds dependencies: `ClaudeExtractor` (client), `QuoteRepository` (connection),
+  `Pipeline` (extractor). Stateless logic (`validate`, parsers) stays as plain functions.
+- `QuoteExtractor` is a `typing.Protocol` (~ a Java interface, but structural: a class matches by having
+  `.extract()`, without declaring `implements`). `Pipeline` depends on the protocol, not on Claude.
+- `scripts/common.py` is the composition root (~ Spring application context): the only place that builds real
+  objects. The extraction prompt now lives in `extraction/prompt.py`.
+- New `tests/test_pipeline.py`: the whole pipeline offline with a `FakeExtractor`.
+
+**Python vs Java structure (interview / sanity):** module = unit of organisation; functions are first-class
+(a one-method interface is usually just a function); DI by constructor/default args, no container; flat over
+nested until it hurts. Structure is added when it pays for itself, not up front.

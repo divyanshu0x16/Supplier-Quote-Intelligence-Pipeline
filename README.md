@@ -141,7 +141,15 @@ so weak spots are visible (for example, *"lead time is right 70% of the time"*).
 ```
 .
 ├── src/quote_pipeline/   # the pipeline itself (only code that ships to production)
-├── scripts/              # dev tools, e.g. the synthetic data generator
+│   ├── config.py         #   all settings in one place (env vars / .env)
+│   ├── domain/           #   models, catalog, business rules: pure logic, no I/O
+│   ├── parsing.py        #   email / CSV / PDF -> text
+│   ├── extraction/       #   Claude extractor + the extraction prompt
+│   ├── storage/          #   Postgres repository + schema.sql
+│   ├── pipeline.py       #   parse -> extract -> validate (extractor injected)
+│   └── ingest.py         #   skip already-seen files, otherwise process + store
+├── scripts/              # dev tools: data generator, pipeline runs (and the wiring of real objects)
+├── docker-compose.yml    # local Postgres (with pgvector)
 ├── learning/             # crash-course exercises
 ├── data/generated/       # generated sample documents (gitignored)
 ├── tests/                # pytest suite

@@ -2,16 +2,17 @@ from datetime import date
 
 import pytest
 
-from quote_pipeline.schema import ExtractedQuote
-from quote_pipeline.validation import validate
+from quote_pipeline.domain.models import ExtractedQuote
+from quote_pipeline.domain.validation import validate
 
 RECEIVED = date(2026, 10, 24)
+MAX_LEAD_DAYS = 180
 GOOD = dict(supplier="Acme Components Inc.", part_number="CN-2201", unit_price=0.38, currency="USD",
             moq=None, lead_time_days=42, valid_until=date(2027, 1, 22))
 
 
 def issues_for(**changes) -> list[str]:
-    return validate(ExtractedQuote(**{**GOOD, **changes}), RECEIVED)
+    return validate(ExtractedQuote(**{**GOOD, **changes}), RECEIVED, MAX_LEAD_DAYS)
 
 
 def test_good_quote_has_no_issues():

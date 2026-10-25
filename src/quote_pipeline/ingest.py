@@ -1,19 +1,23 @@
-"""The entry point for one incoming document: skip it if seen before, otherwise process and store it (M5)."""
+"""The entry point for one incoming document: skip it if seen before, otherwise process and store it."""
 
+import hashlib
 from datetime import date
 from pathlib import Path
 
-import psycopg
-
-from quote_pipeline.db import file_sha256, is_loaded, load_document
-from quote_pipeline.pipeline import process_file
+from quote_pipeline.pipeline import Pipeline
+from quote_pipeline.storage.repository import QuoteRepository
 
 
-def ingest_file(conn: psycopg.Connection, path: Path, source_file: str, received_on: date,
-                supplier: str | None = None) -> bool:
+def file_sha256(path: Path) -> str:
+    """Fingerprint of the file's bytes: the same file always gives the same hash, whatever it's called."""
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def ingest_file(repo: QuoteRepository, pipeline: Pipeline, path: Path, source_file: str,
+                received_on: date, supplier: str | None = None) -> bool:
     """Returns True if the document was processed and stored, False if it was already in the database."""
     sha256 = file_sha256(path)
-    if is_loaded(conn, sha256):  # checked BEFORE extraction, so a re-run costs no LLM calls
+    if repo.is_loaded(sha256):  # checked BEFORE extraction, so a re-run costs no LLM calls
         return False
-    outcomes = process_file(path, source_file, received_on, supplier)
-    return load_document(conn, source_file, sha256, received_on, outcomes)
+    outcomes = pipeline.process_file(path, source_file, received_on, supplier)
+    return repo.save_document(source_file, sha256, received_on, outcomes)

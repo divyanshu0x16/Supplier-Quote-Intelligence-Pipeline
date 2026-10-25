@@ -4,7 +4,7 @@ from email.message import EmailMessage
 import pytest
 from reportlab.pdfgen import canvas
 
-from quote_pipeline.parsers import parse_csv, parse_email, parse_file, parse_pdf
+from quote_pipeline.parsing import parse_csv, parse_email, parse_file, parse_pdf
 
 
 def test_parse_email_decodes_body(tmp_path):
