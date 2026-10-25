@@ -116,3 +116,29 @@
 
 **Open questions:**
 - Wire it together: parse -> extract -> fill supplier from ingestion metadata -> validate (M4).
+
+## M4 — Validation + needs_review
+**Built:** `validation.validate(quote, received_on) -> list[str]` (empty = valid); `pipeline.process_file()` =
+parse -> extract -> fill supplier from metadata -> validate, one `Outcome` per quote; `scripts/run_pipeline.py`
+runs all 42 and compares with ground truth.
+
+**Result (seed 42, Haiku 5.5):** routing 41/42 correct, all 8 planted faults caught; field accuracy 7/7 fields at
+42/42 except currency 41/42; total cost $0.0089.
+
+**Interview cheat sheet:**
+- *Two kinds of error:* a false alarm (valid quote -> review) costs a reviewer seconds; a silent error (wrong value
+  marked valid) costs money and nobody notices. The design deliberately trades silent errors for false alarms.
+- *The one miss:* `¥16` with no country clue -> the model returned `currency: null` as the prompt instructs ->
+  review. Correct, cautious behaviour; the ground truth assumed JPY. Possible fix: fill null currency from supplier
+  master data (same pattern as supplier). Left as-is on purpose.
+- *Rules return reasons, not booleans:* the reason is what a reviewer reads, and all reasons are reported at once.
+- *Thresholds are business decisions:* `MAX_LEAD_TIME_DAYS = 180` needs procurement's sign-off, ideally per category.
+- *Expiry:* load-time check = `valid_until >= received_on` (catches dd/mm misreads, stale forwards). "Still usable
+  today?" is a query-time filter in M6, because a stored flag goes stale.
+- *Failure routing:* bad document (parser ValueError, ExtractionError) -> needs_review; infrastructure failure
+  (APIError after retries) -> stop the run; never blame a document for an outage.
+- *Metadata beats inference:* supplier (and received date) come from how the document arrived, not from the LLM.
+
+**Open questions:**
+- Fill null currency from supplier master data?
+- Sequential run takes ~60 s for 42 calls; concurrency (thread pool) or the Batches API (50% cheaper) for bulk.
